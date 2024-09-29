@@ -13,16 +13,25 @@ type Storage struct {
 }
 
 func New() (*Storage, error) {
-	//const op = "user=postgres password=password dbname=musicinfo sslmode=disable"
-	const op = "postgres://postgres:password@localhost/musicinfo?sslmode=disable"
+	op := "host=localhost user=postgres password=123-123-123-123 dbname=postgres sslmode=disable"
 
+	//op := "user=postgres password=123-123-123-123 dbname=postgres sslmode=disable"
 	db, err := sql.Open("postgres", op)
 	if err != nil {
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", op, err)
-		}
+		panic(err)
 	}
 	defer db.Close()
+
+	//const op = "user=postgres password=password dbname=musicinfo sslmode=disable"
+	//const op = "postgres://postgres:password@localhost/musicinfo?sslmode=disable"
+	//const op = "user=postgres password=123-123-123-123 dbname=postgres sslmode=disable"
+	//db, err := sql.Open("postgres", op)
+	//if err != nil {
+	//	if err != nil {
+	//		return nil, fmt.Errorf("%s: %w", op, err)
+	//	}
+	//}
+	//defer db.Close()
 
 	stmt, err := db.Prepare(`
     CREATE TABLE IF NOT EXISTS songs (
@@ -32,17 +41,29 @@ func New() (*Storage, error) {
         text TEXT,
         release_date DATE,
         link VARCHAR(255));
-    CREATE INDEX IF NOT EXISTS idx_song_name ON songs(song_name);
+    
     `)
 
 	if err != nil {
 		return nil, fmt.Errorf("#{op}: #{err}")
 	}
-
 	_, err = stmt.Exec()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
+
+	stmt.Close()
+
+	stmtIndex, err := db.Prepare(`CREATE INDEX IF NOT EXISTS idx_song ON songs(song);`)
+	if err != nil {
+		return nil, fmt.Errorf("#{op}12: #{err}")
+	}
+	_, err = stmtIndex.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	stmtIndex.Close()
 
 	return &Storage{db: db}, nil
 }
