@@ -2,15 +2,19 @@ package main
 
 import (
 	"RestApi_v1/internal/config/internal/config"
+	"RestApi_v1/internal/config/internal/http-server/handlers/song/get"
 	"RestApi_v1/internal/config/internal/http-server/handlers/song/save"
 	"RestApi_v1/internal/config/internal/lib/logger/sl"
 	"RestApi_v1/internal/config/internal/storage/postgres"
+	"context"
 	"github.com/go-chi/chi/v5"
-
 	"github.com/go-chi/chi/v5/middleware"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 const (
@@ -33,7 +37,7 @@ func main() {
 		log.Error("failed to init storage", sl.Err(err))
 		os.Exit(1)
 	}
-	_ = storage
+	//_ = storage
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -44,8 +48,13 @@ func main() {
 	//router.Use(middleware.URLFormat)
 
 	router.Post("/song", save.New(log, storage))
-	//router.Get("/{song}", get.New(log, storage))
+	router.Get("/{song}", get.New(log, storage))
 	//fmt.Println(cfg)
+
+	log.Info("starting server", slog.String("address", cfg.Address))
+
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	srv := &http.Server{
 		Addr:         cfg.Address,
@@ -55,21 +64,46 @@ func main() {
 		IdleTimeout:  cfg.HTTPServer.Timeout,
 	}
 
-	if err := srv.ListenAndServe(); err != nil {
-		log.Error("failed to start server")
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			log.Error("failed to start server")
+		}
+	}()
+
+	log.Info("server started")
+
+	<-done
+	log.Info("stopping server")
+
+	// TODO: move timeout to config
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Error("failed to stop server", sl.Err(err))
+
+		return
 	}
 
-	log.Error("server stopped")
-	// TODO: init config: cleanenv
+	// TODO: close storage
 
-	// TODO: init logger: slog
-
-	// TODO: init storage: psg
-
-	// TODO: init router: chi, "chi render"
-
-	// TODO: run server:
+	log.Info("server stopped")
 }
+
+//if err := srv.ListenAndServe(); err != nil {
+//	log.Error("failed to start server")
+//}
+//
+//log.Error("server stopped")
+//// TODO: init config: cleanenv
+//
+//// TODO: init logger: slog
+//
+//// TODO: init storage: psg
+//
+//// TODO: init router: chi, "chi render"
+//
+//// TODO: run server:
 
 func setupLogger(env string) *slog.Logger {
 	var log *slog.Logger

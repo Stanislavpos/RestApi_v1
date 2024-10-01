@@ -1,4 +1,4 @@
-package get
+package delete
 
 import (
 	resp "RestApi_v1/internal/config/internal/lib/api/response"
@@ -13,11 +13,11 @@ import (
 	"net/http"
 )
 
-type SongGetter interface {
-	GetSong(songName string) (string, error)
+type SongDelete interface {
+	DeleteSong(songName string) (string, error)
 }
 
-func New(log *slog.Logger, songGetter SongGetter) http.HandlerFunc {
+func New(log *slog.Logger, songDelete SongDelete) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.song.save.New"
 
@@ -35,21 +35,21 @@ func New(log *slog.Logger, songGetter SongGetter) http.HandlerFunc {
 			return
 		}
 
-		resSong, err := songGetter.GetSong(song)
+		resSong, err := songDelete.DeleteSong(song)
 		if errors.Is(err, storage.ErrSongNotFound) {
 			log.Info("song not found", "song", song)
 			render.JSON(w, r, resp.Error("not found"))
 			return
 		}
 		if err != nil {
-			log.Error(op, "failed to get song", sl.Err(err))
+			log.Error(op, "failed to delete song", sl.Err(err))
 			render.JSON(w, r, resp.Error("internal server error"))
 			return
 		}
 
 		//var req Request
 
-		log.Info("got song", slog.String("song", resSong))
+		log.Info("delete song", slog.String("song", resSong))
 		render.JSON(w, r, resSong)
 
 	}

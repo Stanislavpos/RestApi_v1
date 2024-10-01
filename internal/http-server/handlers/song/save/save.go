@@ -11,24 +11,23 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 type Request struct {
-	Song     string `json:"song" validate:"required,song"`
-	Group    string `json:"group"`
-	TextSong string `json:"text_song"`
-	DateSong string `json:"date_song"`
-	LinkSong string `json:"link_song"`
+	Song     string     `json:"song" validate:"required"`
+	Group    string     `json:"group,omitempty"`
+	TextSong string     `json:"text_song,omitempty"`
+	DateSong *time.Time `json:"date_song,omitempty"`
+	LinkSong string     `json:"link_song,omitempty"`
 }
 
 type Response struct {
 	resp.Response
-	//Status string `json:"status"`
-	//Error  string `json:"error,omitempty"`
 }
 
 type SongSaver interface {
-	SaveSong(groupToSave string, songToSave string, textSongToSave string, dateToSave string, linkToSave string) (int64, error)
+	SaveSong(SongToSave string, GroupToSave string, TextSongToSave string, DateToSave time.Time, LinkToSave string) (int64, error)
 }
 
 func New(log *slog.Logger, songSaver SongSaver) http.HandlerFunc {
@@ -41,59 +40,52 @@ func New(log *slog.Logger, songSaver SongSaver) http.HandlerFunc {
 		)
 
 		var req Request
-
 		err := render.DecodeJSON(r.Body, &req)
-		if errors.Is(err, io.EOF) {
-			// Такую ошибку встретим, если получили запрос с пустым телом.
-			// Обработаем её отдельно
-			log.Error("request body is empty")
-
-			render.JSON(w, r, resp.Error("empty request"))
-
-			return
-		}
-
 		if err != nil {
-			log.Error("failed to decode request body", sl.Err(err))
-
-			render.JSON(w, r, resp.Error("failed to decode request"))
-
+			if errors.Is(err, io.EOF) {
+				log.Error("request body is empty")
+				render.JSON(w, r, resp.Error("empty request"))
+			} else {
+				log.Error("failed to decode request body", sl.Err(err))
+				render.JSON(w, r, resp.Error("failed to decode request"))
+			}
 			return
 		}
 
 		log.Info("request body decoded", slog.Any("request", req))
 
 		if err := validator.New().Struct(req); err != nil {
-			validateErr := err.(validator.ValidationErrors)
-			log.Error("failed to validate request", sl.Err(err))
-
-			//render.JSON(w, r, resp.Error("invalid request"))
-			render.JSON(w, r, resp.ValidationError(validateErr))
-
+			if validateErr, ok := err.(validator.ValidationErrors); ok {
+				log.Error("invalid request", sl.Err(err))
+				render.JSON(w, r, resp.ValidationError(validateErr))
+			} else {
+				log.Error("unexpected error during validation", sl.Err(err))
+				render.JSON(w, r, resp.Error("validation error"))
+			}
 			return
 		}
 
-		id, err := songSaver.SaveSong(req.Song, req.Group, req.TextSong, req.DateSong, req.LinkSong)
+		// Устанавливаем стандартное значение для даты, если не указана
+		dateToSave := time.Now() // или time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC) по вашей логике
+		if req.DateSong != nil {
+			dateToSave = *req.DateSong
+		}
 
+		log.Info("Saving song", slog.String("song", req.Song), slog.String("group", req.Group), slog.String("textSong", req.TextSong), slog.String("linkSong", req.LinkSong))
+		id, err := songSaver.SaveSong(req.Song, req.Group, req.TextSong, dateToSave, req.LinkSong)
 		if errors.Is(err, storage.ErrSongExist) {
 			log.Info("song already exists", slog.String("song", req.Song))
-
 			render.JSON(w, r, resp.Error("song already exists"))
-
 			return
 		}
 		if err != nil {
-			log.Error("failed to save song", sl.Err(err))
-
+			log.Error("failed to add song", sl.Err(err))
 			render.JSON(w, r, resp.Error("failed to add song"))
-
 			return
 		}
 
-		log.Info("song saved", slog.Int64("id", id))
-
+		log.Info("song added", slog.Int64("id", id))
 		responseOK(w, r)
-
 	}
 }
 
