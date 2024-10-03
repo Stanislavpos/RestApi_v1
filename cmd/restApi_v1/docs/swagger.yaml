@@ -1,0 +1,5 @@
+host: localhost:8082
+info:
+  contact: {}
+paths: {}
+swagger: "2.0"

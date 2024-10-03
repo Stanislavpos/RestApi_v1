@@ -1,17 +1,20 @@
 package main
 
 import (
+	//_ "RestApi_v1/internal/config/cmd/restApi_v1/docs"
 	"RestApi_v1/internal/config/internal/config"
-	updateSong "RestApi_v1/internal/config/internal/http-server/handlers/song/updateSong"
-
 	del "RestApi_v1/internal/config/internal/http-server/handlers/song/delete"
 	"RestApi_v1/internal/config/internal/http-server/handlers/song/get"
 	"RestApi_v1/internal/config/internal/http-server/handlers/song/save"
+	updateSong "RestApi_v1/internal/config/internal/http-server/handlers/song/updateSong"
 	"RestApi_v1/internal/config/internal/lib/logger/sl"
 	"RestApi_v1/internal/config/internal/storage/postgres"
 	"context"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	"github.com/swaggo/swag/example/basic/docs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,6 +23,10 @@ import (
 	"time"
 )
 
+// gin-swagger middleware
+// swagger embed files
+
+// @host localhost:8082
 const (
 	envLocal = "local"
 	envDev   = "dev"
@@ -28,20 +35,28 @@ const (
 
 func main() {
 
+	docs.SwaggerInfo.Title = "songs from db API"
+	docs.SwaggerInfo.Description = "This is a api for get song from database."
+	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.Host = "songs.swagger.io"
+	docs.SwaggerInfo.BasePath = "/v1"
+	docs.SwaggerInfo.Schemes = []string{"http"}
+
+	router := chi.NewRouter()
+
+	// Загрузка файла документации
 	cfg := config.MustLoad()
 
 	log := setupLogger(cfg.Env)
 
 	log.Info("starting service", slog.String("env", cfg.Env))
 	log.Debug("debug msg are enable")
-
-	storage, err := postgres.New()
+	// старт базы данных, создаем таблицу если ее нет
+	storage, err := postgres.New() // start db
 	if err != nil {
 		log.Error("failed to init storage", sl.Err(err))
 		os.Exit(1)
 	}
-
-	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
 
@@ -49,11 +64,26 @@ func main() {
 
 	router.Use(middleware.Recoverer)
 
-	router.Post("/song", save.New(log, storage))
-	router.Get("/{id}/{page}/{pageSize}", get.New(log, storage))
+	// Определение маршрутов
+	// Метод Post - добавляем в базу данных песню
+	//{
+	//	"group": "Название группы2",
+	//	"song": "1234",
+	//	"textSong": "Текст песни223",
+	//	"dateSong": "2023-01-01",
+	//	"linkSong": "http://ссылка-на-песня"
+	//}
+	router.Post("/song", save.New(log, storage)) // add song to db
 
-	router.Delete("/{song}", del.New(log, storage))
-	router.Put("/edit", updateSong.New(log, storage))
+	// метод Get - получаем из базы данных песню по id, нужно указать номер страницы и размер страницы для пагинации
+	router.Get("/{id}/{page}/{pageSize}", get.New(log, storage)) // get song from db
+	// метод Delete  - удаляем из базы данных песню имени
+	router.Delete("/{song}", del.New(log, storage)) // delete song from db
+	// метод Put  - изменяем песню в базе данных, нужно в запросе передать айди - по айди идет поиск в базе
+	router.Put("/edit", updateSong.New(log, storage)) // edit song in db
+
+	// Подключение Swagger UI
+	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	log.Info("starting server", slog.String("address", cfg.Address))
 
