@@ -1,4 +1,4 @@
-package delete
+package del
 
 import (
 	resp "RestApi_v1/internal/config/internal/lib/api/response"
@@ -46,8 +46,6 @@ func New(log *slog.Logger, songDelete SongDelete) http.HandlerFunc {
 			render.JSON(w, r, resp.Error("internal server error"))
 			return
 		}
-
-		//var req Request
 
 		log.Info("delete song", slog.String("song", resSong))
 		render.JSON(w, r, resSong)

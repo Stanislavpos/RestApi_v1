@@ -11,15 +11,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
 type Request struct {
-	Song     string     `json:"song" validate:"required"`
-	Group    string     `json:"group,omitempty"`
-	TextSong string     `json:"text_song,omitempty"`
-	DateSong *time.Time `json:"date_song,omitempty"`
-	LinkSong string     `json:"link_song,omitempty"`
+	Song     string `json:"song" validate:"required"`
+	Group    string `json:"group,omitempty"`
+	TextSong string `json:"text_song,omitempty"`
+	DateSong string `json:"date_song,omitempty"`
+	LinkSong string `json:"link_song,omitempty"`
 }
 
 type Response struct {
@@ -27,7 +26,7 @@ type Response struct {
 }
 
 type SongSaver interface {
-	SaveSong(SongToSave string, GroupToSave string, TextSongToSave string, DateToSave time.Time, LinkToSave string) (int64, error)
+	SaveSong(SongToSave string, GroupToSave string, TextSongToSave string, DateToSave string, LinkToSave string) (int64, error)
 }
 
 func New(log *slog.Logger, songSaver SongSaver) http.HandlerFunc {
@@ -65,14 +64,14 @@ func New(log *slog.Logger, songSaver SongSaver) http.HandlerFunc {
 			return
 		}
 
-		// Устанавливаем стандартное значение для даты, если не указана
-		dateToSave := time.Now() // или time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC) по вашей логике
-		if req.DateSong != nil {
-			dateToSave = *req.DateSong
-		}
-
 		log.Info("Saving song", slog.String("song", req.Song), slog.String("group", req.Group), slog.String("textSong", req.TextSong), slog.String("linkSong", req.LinkSong))
-		id, err := songSaver.SaveSong(req.Song, req.Group, req.TextSong, dateToSave, req.LinkSong)
+		id, err := songSaver.SaveSong(
+			req.Song,
+			req.Group,
+			req.TextSong,
+			req.DateSong,
+			req.LinkSong,
+		)
 		if errors.Is(err, storage.ErrSongExist) {
 			log.Info("song already exists", slog.String("song", req.Song))
 			render.JSON(w, r, resp.Error("song already exists"))

@@ -2,6 +2,9 @@ package main
 
 import (
 	"RestApi_v1/internal/config/internal/config"
+	updateSong "RestApi_v1/internal/config/internal/http-server/handlers/song/updateSong"
+
+	del "RestApi_v1/internal/config/internal/http-server/handlers/song/delete"
 	"RestApi_v1/internal/config/internal/http-server/handlers/song/get"
 	"RestApi_v1/internal/config/internal/http-server/handlers/song/save"
 	"RestApi_v1/internal/config/internal/lib/logger/sl"
@@ -37,19 +40,20 @@ func main() {
 		log.Error("failed to init storage", sl.Err(err))
 		os.Exit(1)
 	}
-	//_ = storage
+
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
-	//router.Use(middleware.RealIP)
+
 	router.Use(middleware.Logger)
-	//router.Use(middleware.New(log))
+
 	router.Use(middleware.Recoverer)
-	//router.Use(middleware.URLFormat)
 
 	router.Post("/song", save.New(log, storage))
-	router.Get("/{song}", get.New(log, storage))
-	//fmt.Println(cfg)
+	router.Get("/{id}/{page}/{pageSize}", get.New(log, storage))
+
+	router.Delete("/{song}", del.New(log, storage))
+	router.Put("/edit", updateSong.New(log, storage))
 
 	log.Info("starting server", slog.String("address", cfg.Address))
 
@@ -75,7 +79,6 @@ func main() {
 	<-done
 	log.Info("stopping server")
 
-	// TODO: move timeout to config
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -85,25 +88,8 @@ func main() {
 		return
 	}
 
-	// TODO: close storage
-
 	log.Info("server stopped")
 }
-
-//if err := srv.ListenAndServe(); err != nil {
-//	log.Error("failed to start server")
-//}
-//
-//log.Error("server stopped")
-//// TODO: init config: cleanenv
-//
-//// TODO: init logger: slog
-//
-//// TODO: init storage: psg
-//
-//// TODO: init router: chi, "chi render"
-//
-//// TODO: run server:
 
 func setupLogger(env string) *slog.Logger {
 	var log *slog.Logger
